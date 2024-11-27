@@ -1,0 +1,168 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_NAME_LENGTH 100
+#define MAX_CABIN_LENGTH 20
+#define MAX_PASSENGERS 1000
+
+// Define the Passenger structure to match the Titanic dataset
+typedef struct {
+    int passenger_id;
+    int pclass;
+    char name[MAX_NAME_LENGTH];
+    char sex[10];
+    float age;
+    int sibsp;
+    int parch;
+    char ticket[20];
+    float fare;
+    char cabin[MAX_CABIN_LENGTH];
+    char embarked[2];
+    int survived; // 0 = No, 1 = Yes
+} Passenger;
+
+// Function to load the Titanic dataset from CSV
+int load_data(const char *filename, Passenger passengers[]) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        printf("Error opening file\n");
+        return 0;
+    }
+
+    char line[1024];
+    int count = 0;
+
+    // Skip the header line
+    fgets(line, sizeof(line), file);
+
+    while (fgets(line, sizeof(line), file)) {
+        // Parse each line
+        Passenger p;
+        char age_str[10];
+        char survived_str[2];
+
+        sscanf(line, "%d,%d,%99[^,],%9[^,],%[^,],%d,%d,%19[^,],%f,%19[^,],%1s,%1s",
+            &p.passenger_id, &p.pclass, p.name, p.sex, age_str, &p.sibsp, &p.parch,
+            p.ticket, &p.fare, p.cabin, p.embarked, survived_str);
+
+        p.age = (age_str[0] != '\0') ? atof(age_str) : -1; // Handle missing age
+        p.survived = (survived_str[0] == '1') ? 1 : 0;
+
+        passengers[count++] = p;
+    }
+
+    fclose(file);
+    return count;
+}
+
+// Function to calculate the average age of all passengers
+float calculate_average_age(Passenger passengers[], int count) {
+    float total_age = 0;
+    int valid_count = 0;
+
+    for (int i = 0; i < count; i++) {
+        if (passengers[i].age != -1) {  // Exclude missing age data
+            total_age += passengers[i].age;
+            valid_count++;
+        }
+    }
+
+    return (valid_count > 0) ? total_age / valid_count : 0;
+}
+
+// Function to calculate the survival rate based on sex
+void calculate_survival_rate(Passenger passengers[], int count) {
+    int male_survived = 0, male_total = 0;
+    int female_survived = 0, female_total = 0;
+
+    for (int i = 0; i < count; i++) {
+        if (strcmp(passengers[i].sex, "male") == 0) {
+            male_total++;
+            if (passengers[i].survived == 1) {
+                male_survived++;
+            }
+        } else if (strcmp(passengers[i].sex, "female") == 0) {
+            female_total++;
+            if (passengers[i].survived == 1) {
+                female_survived++;
+            }
+        }
+    }
+
+    printf("Survival Rate by Gender:\n");
+    if (male_total > 0) {
+        printf("Male Survival Rate: %.2f%%\n", (male_survived / (float)male_total) * 100);
+    }
+    if (female_total > 0) {
+        printf("Female Survival Rate: %.2f%%\n", (female_survived / (float)female_total) * 100);
+    }
+}
+
+// Function to display the list of passengers who survived
+void display_survivors(Passenger passengers[], int count) {
+    printf("List of Passengers Who Survived:\n");
+    for (int i = 0; i < count; i++) {
+        if (passengers[i].survived == 1) {
+            printf("Name: %s, Age: %.1f, Class: %d\n", passengers[i].name, passengers[i].age, passengers[i].pclass);
+        }
+    }
+}
+
+// Function to display passengers with missing cabin details
+void display_missing_cabin(Passenger passengers[], int count) {
+    printf("List of Passengers with Missing Cabin Details:\n");
+    for (int i = 0; i < count; i++) {
+        if (strlen(passengers[i].cabin) == 0) {
+            printf("Name: %s, Age: %.1f, Class: %d\n", passengers[i].name, passengers[i].age, passengers[i].pclass);
+        }
+    }
+}
+
+// Function to write results to a new CSV file
+void write_results_to_csv(const char *filename, Passenger passengers[], int count) {
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        printf("Error opening output file\n");
+        return;
+    }
+
+    fprintf(file, "PassengerId,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked,Survived\n");
+
+    for (int i = 0; i < count; i++) {
+        fprintf(file, "%d,%d,%s,%s,%.1f,%d,%d,%s,%.2f,%s,%s,%d\n",
+            passengers[i].passenger_id, passengers[i].pclass, passengers[i].name, passengers[i].sex,
+            passengers[i].age, passengers[i].sibsp, passengers[i].parch, passengers[i].ticket,
+            passengers[i].fare, passengers[i].cabin, passengers[i].embarked, passengers[i].survived);
+    }
+
+    fclose(file);
+}
+
+int main() {
+    Passenger passengers[MAX_PASSENGERS];
+    int count = load_data("titanic.csv", passengers);  // Load Titanic dataset
+
+    if (count == 0) {
+        printf("No data loaded\n");
+        return 1;
+    }
+
+    // Calculate average age
+    float avg_age = calculate_average_age(passengers, count);
+    printf("Average Age of Passengers: %.2f\n", avg_age);
+
+    // Calculate survival rate based on sex
+    calculate_survival_rate(passengers, count);
+
+    // Display passengers who survived
+    display_survivors(passengers, count);
+
+    // Display passengers with missing cabin details
+    display_missing_cabin(passengers, count);
+
+    // Write the processed data to a new CSV file
+    write_results_to_csv("titanic_results.csv", passengers, count);
+
+    return 0;
+}

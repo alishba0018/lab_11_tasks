@@ -1,0 +1,222 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_COURSES 5
+#define MAX_NAME_LENGTH 100
+
+// Course structure to store course details
+typedef struct {
+    char course_name[MAX_NAME_LENGTH];
+    char course_code[MAX_NAME_LENGTH];
+    char instructor[MAX_NAME_LENGTH];
+} Course;
+
+// Student structure to store student details and enrolled courses
+typedef struct {
+    char name[MAX_NAME_LENGTH];
+    int roll_number;
+    Course enrolled_courses[MAX_COURSES];  // Array of enrolled courses
+    int course_count;  // Number of courses student is enrolled in
+} Student;
+
+// Function to write student data to the binary file
+void write_student_data(FILE *file, Student student) {
+    fwrite(&student, sizeof(Student), 1, file);
+}
+
+// Function to read all students from the binary file
+void read_all_students(FILE *file) {
+    Student student;
+    while (fread(&student, sizeof(Student), 1, file)) {
+        printf("Student Name: %s, Roll Number: %d\n", student.name, student.roll_number);
+        printf("Courses Enrolled:\n");
+        for (int i = 0; i < student.course_count; i++) {
+            printf("%s (%s) - Instructor: %s\n", student.enrolled_courses[i].course_name,
+                   student.enrolled_courses[i].course_code,
+                   student.enrolled_courses[i].instructor);
+        }
+        printf("\n");
+    }
+}
+
+// Function to display courses enrolled by a student
+void display_student_courses(Student student) {
+    printf("Courses enrolled by %s (Roll No: %d):\n", student.name, student.roll_number);
+    for (int i = 0; i < student.course_count; i++) {
+        printf("%s (%s) - Instructor: %s\n", student.enrolled_courses[i].course_name,
+               student.enrolled_courses[i].course_code,
+               student.enrolled_courses[i].instructor);
+    }
+}
+
+// Function to generate a report of total enrollments per course
+void generate_course_report(FILE *file) {
+    Student student;
+    Course course_report[MAX_COURSES];
+    int course_count = 0;
+
+    // Iterate through the file and count enrollments for each course
+    while (fread(&student, sizeof(Student), 1, file)) {
+        for (int i = 0; i < student.course_count; i++) {
+            int found = 0;
+            for (int j = 0; j < course_count; j++) {
+                if (strcmp(course_report[j].course_code, student.enrolled_courses[i].course_code) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                course_report[course_count++] = student.enrolled_courses[i];
+            }
+        }
+    }
+
+    printf("Course Enrollment Report:\n");
+    for (int i = 0; i < course_count; i++) {
+        int enrollment_count = 0;
+        fseek(file, 0, SEEK_SET);  // Reset file pointer to start
+        while (fread(&student, sizeof(Student), 1, file)) {
+            for (int j = 0; j < student.course_count; j++) {
+                if (strcmp(course_report[i].course_code, student.enrolled_courses[j].course_code) == 0) {
+                    enrollment_count++;
+                }
+            }
+        }
+        printf("%s (%s) - Instructor: %s - Enrolled Students: %d\n",
+               course_report[i].course_name,
+               course_report[i].course_code,
+               course_report[i].instructor,
+               enrollment_count);
+    }
+}
+
+// Function to modify a student's enrollment
+void modify_student_enrollment(FILE *file, int roll_number) {
+    Student student;
+    FILE *temp_file = fopen("temp.dat", "wb");
+    if (temp_file == NULL) {
+        printf("Error opening temp file.\n");
+        return;
+    }
+
+    int found = 0;
+    fseek(file, 0, SEEK_SET);
+    while (fread(&student, sizeof(Student), 1, file)) {
+        if (student.roll_number == roll_number) {
+            printf("Found student: %s (Roll No: %d)\n", student.name, student.roll_number);
+            display_student_courses(student);
+            printf("Modifying enrollment...\n");
+            // You can add code here to modify the student's enrolled courses
+            // For example, add or remove a course
+            found = 1;
+        }
+        fwrite(&student, sizeof(Student), 1, temp_file);  // Write unchanged data
+    }
+
+    if (!found) {
+        printf("Student with Roll No: %d not found.\n", roll_number);
+    }
+
+    fclose(temp_file);
+    fclose(file);
+    remove("students.dat");
+    rename("temp.dat", "students.dat");  // Replace the original file with the updated one
+}
+
+// Function to input and create a student
+void create_student(Student *student) {
+    printf("Enter Student Name: ");
+    fgets(student->name, MAX_NAME_LENGTH, stdin);
+    student->name[strcspn(student->name, "\n")] = 0;  // Remove newline character
+    printf("Enter Roll Number: ");
+    scanf("%d", &student->roll_number);
+    getchar();  // To consume newline left by scanf
+
+    printf("Enter number of courses: ");
+    scanf("%d", &student->course_count);
+    getchar();  // To consume newline
+
+    for (int i = 0; i < student->course_count; i++) {
+        printf("Enter Course %d Name: ", i + 1);
+        fgets(student->enrolled_courses[i].course_name, MAX_NAME_LENGTH, stdin);
+        student->enrolled_courses[i].course_name[strcspn(student->enrolled_courses[i].course_name, "\n")] = 0;
+
+        printf("Enter Course %d Code: ", i + 1);
+        fgets(student->enrolled_courses[i].course_code, MAX_NAME_LENGTH, stdin);
+        student->enrolled_courses[i].course_code[strcspn(student->enrolled_courses[i].course_code, "\n")] = 0;
+
+        printf("Enter Instructor for Course %d: ", i + 1);
+        fgets(student->enrolled_courses[i].instructor, MAX_NAME_LENGTH, stdin);
+        student->enrolled_courses[i].instructor[strcspn(student->enrolled_courses[i].instructor, "\n")] = 0;
+    }
+}
+
+int main() {
+    FILE *file = fopen("students.dat", "rb+");
+    if (file == NULL) {
+        printf("Error opening file for reading/writing.\n");
+        return 1;
+    }
+
+    int choice;
+    do {
+        printf("\nStudent Course Enrollment System\n");
+        printf("1. Add Student\n");
+        printf("2. Display Student Courses\n");
+        printf("3. Generate Course Enrollment Report\n");
+        printf("4. Modify Student Enrollment\n");
+        printf("5. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+        getchar();  // To consume newline character after scanf
+
+        switch (choice) {
+            case 1: {
+                Student new_student;
+                create_student(&new_student);
+                write_student_data(file, new_student);
+                break;
+            }
+            case 2: {
+                int roll_number;
+                printf("Enter Roll Number: ");
+                scanf("%d", &roll_number);
+                fseek(file, 0, SEEK_SET);  // Reset file pointer to the beginning
+                Student student;
+                int found = 0;
+                while (fread(&student, sizeof(Student), 1, file)) {
+                    if (student.roll_number == roll_number) {
+                        display_student_courses(student);
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) {
+                    printf("Student with Roll Number %d not found.\n", roll_number);
+                }
+                break;
+            }
+            case 3: {
+                fseek(file, 0, SEEK_SET);  // Reset file pointer to the beginning
+                generate_course_report(file);
+                break;
+            }
+            case 4: {
+                int roll_number;
+                printf("Enter Roll Number to Modify Enrollment: ");
+                scanf("%d", &roll_number);
+                modify_student_enrollment(file, roll_number);
+                break;
+            }
+            case 5:
+                printf("Exiting system.\n");
+                break;
+            default:
+                printf("Invalid choice. Please try again.\n");
+        }
+    } while (choice != 5);
+
+    fclose(file);
+    return 0;
+}
